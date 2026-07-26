@@ -59,4 +59,4 @@
 
 ---
 
-*Designed & Prepared by Eliana Noé — Server Health & Diagnostics Engine v13.*
+*Designed & Prepared by Eliana Noé — Server Health & Diagnostics Engine.*
