@@ -22,7 +22,7 @@
 * **📖 Server Owner Explainer Guide:** In-app accordion guide explaining DayZ Central Economy terms (`nominal`, `min`, `quantmin`, `quantmax`) in simple, non-technical language.
 * **🔍 Real-Time Search & Category Filters:**
   * Search instantly by item classname or XML file.
-  * Filter pills: `All Items`, `🔴 Fatal min > nom`, `🔥 Extreme Nominal (>=500)`.
+  * Filter pills: `All Items`, `🔴 Fatal min > nom`, `🔥 Extreme Nominal (>=100)`.
   * Column sorting (Nominal, Min, Lifetime, XML File).
 * **📋 One-Click Developer Executive Summary:** Copies a clean, formatted Markdown summary to clipboard for easy handoff to server developers.
 
