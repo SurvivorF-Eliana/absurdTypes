@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DayZ Central Economy • Interactive Nominals & Audit Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Host Grotesk', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #050507; color: #e4e4e7; font-family: 'Host Grotesk', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .glass-card { background: rgba(15, 15, 20, 0.85); border: 1px solid #27272a; backdrop-filter: blur(12px); border-radius: 12px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #09090b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col custom-scrollbar">
+
+    <!-- HEADER -->
+    <header class="border-b border-zinc-800 bg-black/90 backdrop-blur sticky top-0 z-50 px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-500">
+                <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-white tracking-wide uppercase flex items-center gap-2">
+                    DayZ Central Economy <span class="text-xs font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">Audit Viewer v13</span>
+                </h1>
+                <p class="text-zinc-500 text-xs font-mono">Interactive Economy Diagnostics for Server Owners & Developers</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="copyDevSummary()" id="btn-copy-summary" class="hidden bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 font-mono text-xs px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2">
+                <i class="fa-solid fa-copy text-blue-400"></i> Copy Dev Summary
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+        <!-- DROP ZONE -->
+        <div id="drop-zone" onclick="document.getElementById('file-input').click()" 
+             class="border-2 border-dashed border-zinc-700 hover:border-red-500/70 bg-zinc-950/60 hover:bg-zinc-900/50 transition-all rounded-2xl p-10 text-center cursor-pointer flex flex-col items-center justify-center space-y-3 group">
+            <input type="file" id="file-input" class="hidden" accept=".md,.txt,.xml">
+            <div class="w-14 h-14 rounded-full bg-zinc-900 border border-zinc-700 group-hover:border-red-500/50 flex items-center justify-center text-zinc-400 group-hover:text-red-400 transition">
+                <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+            </div>
+            <div>
+                <h3 class="text-white font-bold text-lg">Drop <code class="text-red-400 font-mono">ABSURD_NOMINALS_FULL_REPORT_EN.md</code> or any Economy XML file</h3>
+                <p class="text-zinc-500 text-xs font-mono mt-1">Parses all 9,000+ items, calculates true world item load & ranks top offender XML files</p>
+            </div>
+        </div>
+
+        <!-- DASHBOARD (HIDDEN UNTIL LOADED) -->
+        <div id="dashboard" class="hidden space-y-6">
+
+            <!-- KPI CARDS -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="glass-card p-5 flex flex-col justify-between">
+                    <span class="text-zinc-500 text-xs font-mono uppercase tracking-wider">Total Flagged Items</span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="kpi-total-items" class="text-3xl font-extrabold text-white font-mono">0</span>
+                        <span class="text-xs text-zinc-400 font-mono">items</span>
+                    </div>
+                </div>
+
+                <div class="glass-card p-5 flex flex-col justify-between border-red-900/50 bg-red-950/10">
+                    <span class="text-red-400 text-xs font-mono uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrows-rotate text-red-500"></i> Fatal Loop Bugs (min > nom)
+                    </span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="kpi-fatal-loops" class="text-3xl font-extrabold text-red-500 font-mono">0</span>
+                        <span class="text-xs text-red-400/80 font-mono">infinite loops</span>
+                    </div>
+                </div>
+
+                <div class="glass-card p-5 flex flex-col justify-between border-orange-900/50 bg-orange-950/10">
+                    <span class="text-orange-400 text-xs font-mono uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-boxes-stacked text-orange-500"></i> Requested World Items
+                    </span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="kpi-total-nominals" class="text-3xl font-extrabold text-orange-400 font-mono">0</span>
+                        <span class="text-xs text-zinc-500 font-mono">vs 12,000 target</span>
+                    </div>
+                </div>
+
+                <div class="glass-card p-5 flex flex-col justify-between">
+                    <span class="text-zinc-500 text-xs font-mono uppercase tracking-wider">Server CE Capacity</span>
+                    <div class="mt-2 space-y-1.5">
+                        <div class="flex justify-between items-center text-xs font-mono">
+                            <span id="kpi-overload-pct" class="font-bold text-red-400">0%</span>
+                            <span class="text-zinc-500">Target: 100%</span>
+                        </div>
+                        <div class="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                            <div id="kpi-bar" class="h-full bg-red-600 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXPLAINER ACCORDION FOR SERVER OWNER -->
+            <div class="glass-card overflow-hidden">
+                <button onclick="toggleExplainer()" class="w-full px-6 py-4 flex justify-between items-center text-left hover:bg-zinc-900/50 transition">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-circle-question text-blue-400"></i>
+                        <span class="font-bold text-white text-sm">Server Owner Guide: What do these numbers mean?</span>
+                    </div>
+                    <i id="explainer-chevron" class="fa-solid fa-chevron-down text-zinc-500 text-xs transition-transform"></i>
+                </button>
+                <div id="explainer-content" class="hidden px-6 pb-6 pt-2 border-t border-zinc-800/60 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs leading-relaxed text-zinc-400">
+                    <div class="bg-zinc-900/60 p-4 rounded-lg border border-zinc-800 space-y-1">
+                        <h4 class="font-bold text-white text-xs font-mono uppercase flex items-center gap-1.5">
+                            <i class="fa-tag text-blue-400"></i> Nominal vs Min
+                        </h4>
+                        <p><strong class="text-zinc-200">Nominal:</strong> Target ceiling quantity of an item in the world. (There is NO <code class="text-blue-300">&lt;max&gt;</code> tag for item counts in DayZ; nominal IS the max ceiling).</p>
+                        <p><strong class="text-zinc-200">Min:</strong> The floor threshold. When current world count drops below Min, the server spawns more until reaching Nominal.</p>
+                    </div>
+                    <div class="bg-red-950/20 p-4 rounded-lg border border-red-900/40 space-y-1">
+                        <h4 class="font-bold text-red-400 text-xs font-mono uppercase flex items-center gap-1.5">
+                            <i class="fa-arrows-rotate"></i> Fatal <code class="text-red-300">min > nominal</code> Loop
+                        </h4>
+                        <p>When <code class="text-red-300">min</code> is higher than <code class="text-red-300">nominal</code> (e.g. min 4,750 vs nominal 3,600):</p>
+                        <p class="text-zinc-300">1. Count (3600) &lt; Min (4750) &rarr; Force spawn loot.</p>
+                        <p class="text-zinc-300">2. Ceiling is 3600 &rarr; Server cannot exceed 3600.</p>
+                        <p class="text-zinc-300">3. Loop runs <strong>every tick infinitely</strong> &rarr; Server FPS crashes.</p>
+                    </div>
+                    <div class="bg-zinc-900/60 p-4 rounded-lg border border-zinc-800 space-y-1">
+                        <h4 class="font-bold text-white text-xs font-mono uppercase flex items-center gap-1.5">
+                            <i class="fa-percent text-amber-400"></i> QuantMin & QuantMax
+                        </h4>
+                        <p>Defines the <strong class="text-zinc-200">percentage (0% to 100%)</strong> of internal capacity/ammo/water an item spawns with. E.g. 20% to 80% full.</p>
+                        <p><strong class="text-zinc-200">Value -1:</strong> Disables quantity system for items without capacity (e.g. tools/keycards).</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RANKED OFFENDING XML FILES / MODS TABLE -->
+            <div class="glass-card p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-fire-flame-curved text-orange-500"></i> Top Offending XML Files / Mods (Ranked by Inflation)
+                        </h3>
+                        <p class="text-xs text-zinc-500 font-mono mt-0.5">Click any file to filter the main table to that XML file only</p>
+                    </div>
+                    <button onclick="clearFileFilter()" id="btn-clear-file-filter" class="hidden text-xs font-mono text-blue-400 hover:text-blue-300">
+                        <i class="fa-xmark mr-1"></i> Clear File Filter
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead>
+                            <tr class="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider">
+                                <th class="pb-3 font-semibold">Rank</th>
+                                <th class="pb-3 font-semibold">XML File / Mod Source</th>
+                                <th class="pb-3 font-semibold text-right">Flagged Items</th>
+                                <th class="pb-3 font-semibold text-right">Total Nominals</th>
+                                <th class="pb-3 font-semibold text-right">Fatal Loops (min > nom)</th>
+                                <th class="pb-3 font-semibold text-center">Impact Level</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ranked-files-body" class="divide-y divide-zinc-800/50 text-zinc-300">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- MAIN ITEMS TABLE CONTROLS -->
+            <div class="glass-card p-6 space-y-4">
+                <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+                    <!-- SEARCH -->
+                    <div class="relative flex-1">
+                        <i class="fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-xs"></i>
+                        <input type="text" id="search-input" oninput="applyFilters()" placeholder="Search by item classname or XML file..."
+                               class="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono transition">
+                    </div>
+
+                    <!-- FILTER PILLS -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="setCategoryFilter('all')" id="pill-all" class="pill-btn active px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-white text-black transition">
+                            All Items (<span id="cnt-all">0</span>)
+                        </button>
+                        <button onclick="setCategoryFilter('fatal')" id="pill-fatal" class="pill-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-zinc-900 hover:bg-zinc-800 text-red-400 border border-zinc-800 transition">
+                            🔴 Fatal min > nom (<span id="cnt-fatal">0</span>)
+                        </button>
+                        <button onclick="setCategoryFilter('extreme')" id="pill-extreme" class="pill-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-zinc-900 hover:bg-zinc-800 text-orange-400 border border-zinc-800 transition">
+                            🔥 Extreme (Nom >= 500) (<span id="cnt-extreme">0</span>)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MAIN TABLE -->
+                <div class="overflow-x-auto border border-zinc-800/80 rounded-lg">
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead class="bg-zinc-900/80 text-zinc-400 border-b border-zinc-800">
+                            <tr>
+                                <th class="p-3 cursor-pointer hover:text-white" onclick="sortTable('id')">#</th>
+                                <th class="p-3 cursor-pointer hover:text-white" onclick="sortTable('file')">XML File</th>
+                                <th class="p-3 cursor-pointer hover:text-white" onclick="sortTable('name')">Classname</th>
+                                <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('nominal')">Nominal (Max Target)</th>
+                                <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('min')">Min (Floor)</th>
+                                <th class="p-3 text-center">QuantMin - QuantMax (%)</th>
+                                <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('lifetime')">Lifetime (s)</th>
+                                <th class="p-3">Flagged Reasons</th>
+                            </tr>
+                        </thead>
+                        <tbody id="items-table-body" class="divide-y divide-zinc-800/40 text-zinc-300 bg-zinc-950/40">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- PAGINATION CONTROLS -->
+                <div class="flex justify-between items-center text-xs font-mono text-zinc-500 pt-2">
+                    <span id="pagination-info">Showing 0-0 of 0</span>
+                    <div class="flex items-center gap-2">
+                        <button onclick="prevPage()" id="btn-prev" class="px-3 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-40 disabled:hover:text-zinc-400">
+                            <i class="fa-chevron-left mr-1"></i> Prev
+                        </button>
+                        <span id="page-num" class="text-zinc-300 px-2">Page 1</span>
+                        <button onclick="nextPage()" id="btn-next" class="px-3 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-40 disabled:hover:text-zinc-400">
+                            Next <i class="fa-chevron-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- JS ENGINE -->
+    <script>
+        let allParsedItems = [];
+        let filteredItems = [];
+        let activeCategory = 'all';
+        let activeFileFilter = null;
+        let currentPage = 1;
+        const pageSize = 100;
+        let sortCol = 'nominal';
+        let sortAsc = false;
+
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-red-500'); });
+        dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.classList.remove('border-red-500'); });
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.classList.remove('border-red-500');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', e => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const text = e.target.result;
+                if (file.name.toLowerCase().endsWith('.xml')) {
+                    parseXmlFile(text, file.name);
+                } else {
+                    parseMarkdownReport(text);
+                }
+                renderDashboard();
+            };
+            reader.readAsText(file, 'utf-8');
+        }
+
+        // ROBUST MARKDOWN TABLE PARSER (Strips bold **, extracts Column 2 XML file)
+        function parseMarkdownReport(text) {
+            allParsedItems = [];
+            const lines = text.split(/\r?\n/);
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line.startsWith('|')) continue;
+
+                const rawCols = line.split('|').map(c => c.trim());
+                if (rawCols.length < 9) continue;
+
+                const cols = rawCols.filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+                if (cols.length < 8) continue;
+
+                if (cols[0] === '#' || cols[0].includes('---') || isNaN(parseInt(cols[0], 10))) continue;
+
+                const num = parseInt(cols[0], 10);
+                const xmlFile = cols[1].replace(/`/g, '').trim();
+                const classname = cols[2].replace(/`/g, '').trim();
+
+                const nomStr = cols[3].replace(/\*/g, '').replace(/,/g, '').trim();
+                const minStr = cols[4].replace(/\*/g, '').replace(/,/g, '').trim();
+                const restockStr = cols[5].replace(/\*/g, '').replace(/,/g, '').trim();
+                const qminStr = cols[6].replace(/%/g, '').trim();
+                const qmaxStr = cols[7].replace(/%/g, '').trim();
+                const lifeStr = cols[8].replace(/\*/g, '').replace(/,/g, '').trim();
+                const alertStr = cols.length >= 10 ? cols[9] : '';
+
+                const nominal = parseInt(nomStr, 10) || 0;
+                const minVal = parseInt(minStr, 10) || 0;
+                const restock = parseInt(restockStr, 10) || 0;
+                const lifetime = parseInt(lifeStr, 10) || 0;
+
+                const isFatalLoop = minVal > nominal && nominal > 0;
+                const isExtremeNominal = nominal >= 500;
+
+                allParsedItems.push({
+                    id: num,
+                    file: xmlFile,
+                    name: classname,
+                    nominal: nominal,
+                    min: minVal,
+                    restock: restock,
+                    qmin: qminStr,
+                    qmax: qmaxStr,
+                    lifetime: lifetime,
+                    reasons: alertStr,
+                    isFatalLoop: isFatalLoop,
+                    isExtremeNominal: isExtremeNominal
+                });
+            }
+        }
+
+        function parseXmlFile(text, filename) {
+            allParsedItems = [];
+            const typeRe = /<type\s+name=["']([^"']+)["'][^>]*>(.*?)<\/type>/gis;
+            let match;
+            let id = 1;
+            while ((match = typeRe.exec(text)) !== null) {
+                const name = match[1];
+                const body = match[2];
+
+                const nomM = body.match(/<nominal>\s*(-?\d+)\s*<\/nominal>/i);
+                const minM = body.match(/<min>\s*(-?\d+)\s*<\/min>/i);
+                const lifeM = body.match(/<lifetime>\s*(-?\d+)\s*<\/lifetime>/i);
+                const restockM = body.match(/<restock>\s*(-?\d+)\s*<\/restock>/i);
+
+                const nominal = nomM ? parseInt(nomM[1], 10) : 0;
+                const minVal = minM ? parseInt(minM[1], 10) : 0;
+                const lifetime = lifeM ? parseInt(lifeM[1], 10) : 0;
+                const restock = restockM ? parseInt(restockM[1], 10) : 0;
+
+                if (nominal >= 50 || minVal > nominal) {
+                    allParsedItems.push({
+                        id: id++,
+                        file: filename,
+                        name: name,
+                        nominal: nominal,
+                        min: minVal,
+                        restock: restock,
+                        qmin: '-',
+                        qmax: '-',
+                        lifetime: lifetime,
+                        reasons: minVal > nominal ? 'CRITICAL: min > nominal' : 'High Nominal',
+                        isFatalLoop: minVal > nominal && nominal > 0,
+                        isExtremeNominal: nominal >= 500
+                    });
+                }
+            }
+        }
+
+        function renderDashboard() {
+            if (!allParsedItems.length) {
+                alert("Could not parse items.");
+                return;
+            }
+
+            document.getElementById('drop-zone').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            document.getElementById('btn-copy-summary').classList.remove('hidden');
+
+            const totalItems = allParsedItems.length;
+            const fatalLoops = allParsedItems.filter(i => i.isFatalLoop).length;
+            const totalNominalsSum = allParsedItems.reduce((acc, i) => acc + i.nominal, 0);
+
+            document.getElementById('kpi-total-items').textContent = totalItems.toLocaleString();
+            document.getElementById('kpi-fatal-loops').textContent = fatalLoops.toLocaleString();
+            document.getElementById('kpi-total-nominals').textContent = totalNominalsSum.toLocaleString();
+
+            const targetNominalCap = 12000;
+            const pct = Math.round((totalNominalsSum / targetNominalCap) * 100);
+            document.getElementById('kpi-overload-pct').textContent = `${pct.toLocaleString()}% OVERLOADED`;
+            document.getElementById('kpi-bar').style.width = `${Math.min(100, pct / 20)}%`;
+
+            document.getElementById('cnt-all').textContent = totalItems.toLocaleString();
+            document.getElementById('cnt-fatal').textContent = fatalLoops.toLocaleString();
+            document.getElementById('cnt-extreme').textContent = allParsedItems.filter(i => i.isExtremeNominal).length.toLocaleString();
+
+            renderRankedFiles();
+            applyFilters();
+        }
+
+        function renderRankedFiles() {
+            const fileGroups = {};
+
+            allParsedItems.forEach(item => {
+                if (!fileGroups[item.file]) {
+                    fileGroups[item.file] = { file: item.file, totalNominal: 0, itemsCount: 0, fatalCount: 0 };
+                }
+                fileGroups[item.file].totalNominal += item.nominal;
+                fileGroups[item.file].itemsCount++;
+                if (item.isFatalLoop) fileGroups[item.file].fatalCount++;
+            });
+
+            const sortedFiles = Object.values(fileGroups).sort((a, b) => b.totalNominal - a.totalNominal);
+            const tbody = document.getElementById('ranked-files-body');
+            tbody.innerHTML = '';
+
+            sortedFiles.forEach((fg, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-zinc-900/80 cursor-pointer transition';
+                tr.onclick = () => filterByFile(fg.file);
+
+                const severityBadge = fg.fatalCount > 20 || fg.totalNominal > 10000 
+                    ? '<span class="px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 text-[10px] font-bold">CRITICAL</span>'
+                    : '<span class="px-2 py-0.5 rounded bg-orange-950 text-orange-400 border border-orange-800 text-[10px] font-bold">HIGH</span>';
+
+                tr.innerHTML = `
+                    <td class="py-2.5 font-bold text-zinc-500">#${idx + 1}</td>
+                    <td class="py-2.5 font-bold text-blue-400 flex items-center gap-2">
+                        <i class="fa-file-code text-zinc-500"></i> ${fg.file}
+                    </td>
+                    <td class="py-2.5 text-right font-mono">${fg.itemsCount.toLocaleString()}</td>
+                    <td class="py-2.5 text-right font-mono font-bold text-orange-400">${fg.totalNominal.toLocaleString()}</td>
+                    <td class="py-2.5 text-right font-mono text-red-400 font-bold">${fg.fatalCount.toLocaleString()}</td>
+                    <td class="py-2.5 text-center">${severityBadge}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterByFile(filename) {
+            activeFileFilter = filename;
+            document.getElementById('btn-clear-file-filter').classList.remove('hidden');
+            applyFilters();
+        }
+
+        function clearFileFilter() {
+            activeFileFilter = null;
+            document.getElementById('btn-clear-file-filter').classList.add('hidden');
+            applyFilters();
+        }
+
+        function toggleExplainer() {
+            const content = document.getElementById('explainer-content');
+            const chev = document.getElementById('explainer-chevron');
+            content.classList.toggle('hidden');
+            chev.classList.toggle('rotate-180');
+        }
+
+        function setCategoryFilter(cat) {
+            activeCategory = cat;
+            document.querySelectorAll('.pill-btn').forEach(btn => {
+                btn.className = 'pill-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition';
+            });
+
+            if (cat === 'all') {
+                document.getElementById('pill-all').className = 'pill-btn active px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-white text-black transition';
+            } else if (cat === 'fatal') {
+                document.getElementById('pill-fatal').className = 'pill-btn active px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-red-600 text-white transition';
+            } else if (cat === 'extreme') {
+                document.getElementById('pill-extreme').className = 'pill-btn active px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-orange-600 text-white transition';
+            }
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const q = document.getElementById('search-input').value.toLowerCase().trim();
+
+            filteredItems = allParsedItems.filter(item => {
+                if (activeFileFilter && item.file !== activeFileFilter) return false;
+                if (activeCategory === 'fatal' && !item.isFatalLoop) return false;
+                if (activeCategory === 'extreme' && !item.isExtremeNominal) return false;
+                if (q && !item.name.toLowerCase().includes(q) && !item.file.toLowerCase().includes(q)) return false;
+                return true;
+            });
+
+            filteredItems.sort((a, b) => {
+                let vA = a[sortCol];
+                let vB = b[sortCol];
+                if (typeof vA === 'string') return sortAsc ? vA.localeCompare(vB) : vB.localeCompare(vA);
+                return sortAsc ? vA - vB : vB - vA;
+            });
+
+            currentPage = 1;
+            renderTable();
+        }
+
+        function sortTable(col) {
+            if (sortCol === col) sortAsc = !sortAsc;
+            else { sortCol = col; sortAsc = false; }
+            applyFilters();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('items-table-body');
+            tbody.innerHTML = '';
+
+            const start = (currentPage - 1) * pageSize;
+            const end = Math.min(start + pageSize, filteredItems.length);
+            const pageItems = filteredItems.slice(start, end);
+
+            pageItems.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-zinc-900/60 transition';
+
+                const alertBadge = item.isFatalLoop 
+                    ? '<span class="px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 text-[10px] font-bold">🔴 min > nom (Fatal)</span>' 
+                    : '<span class="px-2 py-0.5 rounded bg-orange-950 text-orange-400 border border-orange-800 text-[10px] font-bold">Nominal >= 500</span>';
+
+                tr.innerHTML = `
+                    <td class="p-3 text-zinc-500">${item.id}</td>
+                    <td class="p-3 text-zinc-400">${item.file}</td>
+                    <td class="p-3 font-bold text-white">${item.name}</td>
+                    <td class="p-3 text-right font-bold text-orange-400 font-mono">${item.nominal.toLocaleString()}</td>
+                    <td class="p-3 text-right font-mono ${item.isFatalLoop ? 'text-red-400 font-extrabold bg-red-950/20' : 'text-zinc-300'}">${item.min.toLocaleString()}</td>
+                    <td class="p-3 text-center text-zinc-400">${item.qmin} to ${item.qmax}</td>
+                    <td class="p-3 text-right text-zinc-400 font-mono">${item.lifetime.toLocaleString()}s</td>
+                    <td class="p-3">${alertBadge}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('pagination-info').textContent = `Showing ${start + 1}-${end} of ${filteredItems.length.toLocaleString()} items`;
+            document.getElementById('page-num').textContent = `Page ${currentPage} of ${Math.ceil(filteredItems.length / pageSize) || 1}`;
+            document.getElementById('btn-prev').disabled = currentPage === 1;
+            document.getElementById('btn-next').disabled = end >= filteredItems.length;
+        }
+
+        function prevPage() { if (currentPage > 1) { currentPage--; renderTable(); } }
+        function nextPage() { if (currentPage * pageSize < filteredItems.length) { currentPage++; renderTable(); } }
+
+        function copyDevSummary() {
+            const fatalCount = allParsedItems.filter(i => i.isFatalLoop).length;
+            const totalNominalsSum = allParsedItems.reduce((acc, i) => acc + i.nominal, 0);
+
+            let summary = `# DAYZ ECONOMY EXECUTIVE SUMMARY FOR DEVELOPER\n`;
+            summary += `**Date:** ${new Date().toISOString().split('T')[0]}\n`;
+            summary += `**Total Flagged Items:** ${allParsedItems.length}\n`;
+            summary += `**Fatal min > nom Infinite Loops:** ${fatalCount}\n`;
+            summary += `**Total World Item Load Requested:** ${totalNominalsSum.toLocaleString()} (Target: 12,000 max)\n\n`;
+            summary += `## TOP WORST XML FILES TO FIX IMMEDIATELY:\n`;
+
+            const fileGroups = {};
+            allParsedItems.forEach(item => {
+                if (!fileGroups[item.file]) fileGroups[item.file] = { file: item.file, totalNominal: 0, fatalCount: 0 };
+                fileGroups[item.file].totalNominal += item.nominal;
+                if (item.isFatalLoop) fileGroups[item.file].fatalCount++;
+            });
+
+            const sortedFiles = Object.values(fileGroups).sort((a, b) => b.totalNominal - a.totalNominal).slice(0, 10);
+            sortedFiles.forEach((f, idx) => {
+                summary += `${idx + 1}. \`${f.file}\` - ${f.totalNominal.toLocaleString()} nominals requested (${f.fatalCount} min > nom loops)\n`;
+            });
+
+            navigator.clipboard.writeText(summary).then(() => {
+                alert("Executive Summary copied to clipboard!");
+            });
+        }
+    </script>
+</body>
+</html>
