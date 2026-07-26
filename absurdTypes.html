@@ -319,7 +319,7 @@
                 const lifetime = parseInt(lifeStr, 10) || 0;
 
                 const isFatalLoop = minVal > nominal && nominal > 0;
-                const isExtremeNominal = nominal >= 500;
+                const isExtremeNominal = nominal >= 100;
 
                 allParsedItems.push({
                     id: num,
@@ -370,7 +370,7 @@
                         lifetime: lifetime,
                         reasons: minVal > nominal ? 'CRITICAL: min > nominal' : 'High Nominal',
                         isFatalLoop: minVal > nominal && nominal > 0,
-                        isExtremeNominal: nominal >= 500
+                        isExtremeNominal: nominal >= 100
                     });
                 }
             }
